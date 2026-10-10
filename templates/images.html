@@ -1,0 +1,236 @@
+{% extends "base.html" %}
+{% block title %}Images{% endblock %}
+{% block content %}
+<h1>Image Manager</h1>
+
+<div class="card">
+  <div class="img-stats">
+    <div><strong id="st-assigned">0</strong> assigned</div>
+    <div><strong id="st-missing">0</strong> missing</div>
+    <div><strong id="st-total">0</strong> total slots</div>
+  </div>
+
+  <h2 style="margin-top:16px">Output Settings (uniform size for all images)</h2>
+  <div class="row">
+    <div style="flex:1;min-width:120px">
+      <label>Width (px)</label>
+      <input type="number" id="img_width" value="{{ defaults.width }}" min="100" max="4000">
+    </div>
+    <div style="flex:1;min-width:120px">
+      <label>Height (px)</label>
+      <input type="number" id="img_height" value="{{ defaults.height }}" min="100" max="4000">
+    </div>
+    <div style="flex:1;min-width:140px">
+      <label>Mode</label>
+      <select id="img_mode">
+        <option value="fit" {% if defaults.mode=='fit' %}selected{% endif %}>Fit + Background (uniform)</option>
+        <option value="crop" {% if defaults.mode=='crop' %}selected{% endif %}>Crop (fill)</option>
+        <option value="auto" {% if defaults.mode=='auto' %}selected{% endif %}>Auto (keep ratio)</option>
+      </select>
+    </div>
+    <div style="flex:1;min-width:120px">
+      <label>Background Color</label>
+      <input type="color" id="img_bg" value="{{ defaults.bg }}"
+             style="width:100%;height:42px;padding:2px;border-radius:8px;cursor:pointer">
+    </div>
+    <div style="flex:1;min-width:120px">
+      <label>Quality (60-95)</label>
+      <input type="number" id="img_quality" value="{{ defaults.quality }}" min="60" max="95">
+    </div>
+    <div style="flex:1;min-width:140px">
+      <label>CSS Filter</label>
+      <select id="img_filter">
+        {% for f in filters %}
+          <option value="{{ f }}" {% if defaults.filter==f %}selected{% endif %}>{{ f|title }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+  <p class="hint">These settings apply when you upload new images. All images will match exactly — uniform grid look.</p>
+
+  <div class="toolbar">
+    <div class="seg" id="kindSeg">
+      <button data-kind="all" class="active">All</button>
+      <button data-kind="product">Products</button>
+      <button data-kind="post">Posts</button>
+    </div>
+    <div class="seg" id="statusSeg">
+      <button data-status="all" class="active">All</button>
+      <button data-status="missing">Missing</button>
+      <button data-status="assigned">Assigned</button>
+    </div>
+  </div>
+</div>
+
+<div class="tile-grid" id="tileGrid">
+  <div class="empty">Loading…</div>
+</div>
+
+<div class="pagination" id="pagination"></div>
+{% endblock %}
+{% block scripts %}
+<script>
+let KIND = 'all';
+let STATUS = 'all';
+let PAGE = 1;
+
+function getSettings(){
+  return {
+    width: parseInt(document.getElementById('img_width').value) || 800,
+    height: parseInt(document.getElementById('img_height').value) || 800,
+    mode: document.getElementById('img_mode').value,
+    bg_color: document.getElementById('img_bg').value,
+    quality: parseInt(document.getElementById('img_quality').value) || 88,
+    filter: document.getElementById('img_filter').value,
+  };
+}
+
+async function loadStats(){
+  const r = await fetch('/api/images/stats');
+  const s = await r.json();
+  document.getElementById('st-assigned').textContent = s.assigned;
+  document.getElementById('st-missing').textContent = s.missing;
+  document.getElementById('st-total').textContent = s.total_slots;
+}
+
+async function load(){
+  const r = await fetch(`/api/images/list?page=${PAGE}&kind=${KIND}&status=${STATUS}`);
+  const d = await r.json();
+  const grid = document.getElementById('tileGrid');
+  const pag = document.getElementById('pagination');
+  const stamp = Date.now();
+  if (!d.items.length) {
+    grid.innerHTML = '<div class="empty">No slots.</div>';
+    pag.innerHTML = '';
+    return;
+  }
+  grid.innerHTML = d.items.map(item => {
+    const preview = item.image
+      ? `/api/images/preview/${item.kind}/${item.id}?t=${stamp}` : '';
+    const bg = preview ? `background-image:url('${preview}')` : '';
+    const badge = item.image ? '<div class="tile-status ok">✓</div>' : '';
+    return `
+      <div class="tile img-slot" data-kind="${item.kind}" data-id="${item.id}">
+        ${badge}
+        <div class="tile-img" style="${bg}"></div>
+        <div class="tile-num">${item.kind === 'product' ? '📦' : '📝'}</div>
+        <div class="tile-name">
+          <strong>${esc(item.title)}</strong><br>
+          <span class="small">${item.kind} · filter: ${item.filter || 'none'}</span>
+        </div>
+        <div class="tile-actions">
+          <button class="ta-search" title="Search">🔍</button>
+          <button class="ta-upload" title="Upload">⬆</button>
+          ${item.image ? `<button class="ta-rebuild" title="Rebuild">🔧</button>` : ''}
+          ${item.image ? `<button class="ta-remove" title="Remove">✕</button>` : ''}
+        </div>
+      </div>`;
+  }).join('');
+
+  grid.querySelectorAll('.tile').forEach(t => {
+    const kind = t.dataset.kind;
+    const id = parseInt(t.dataset.id);
+
+    t.querySelector('.ta-search').onclick = async e => {
+      e.stopPropagation();
+      const r = await fetch(`/api/images/search-term/${kind}/${id}`);
+      const d = await r.json();
+      const url = `https://www.google.com/search?q=${encodeURIComponent(d.term)}&tbm=isch&tbs=sur:fc`;
+      window.open(url, '_blank', 'noopener');
+    };
+
+    t.querySelector('.ta-upload').onclick = e => {
+      e.stopPropagation(); pick(kind, id);
+    };
+
+    const rb = t.querySelector('.ta-rebuild');
+    if (rb) rb.onclick = async e => {
+      e.stopPropagation();
+      if (!confirm('Rebuild image with current settings?')) return;
+      const s = getSettings();
+      const r = await fetch(`/api/images/rebuild/${kind}/${id}`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(s)
+      });
+      const d = await r.json();
+      toast(d.ok ? '✓ Rebuilt' : '✗ ' + (d.error || ''), !d.ok);
+      load();
+    };
+
+    const rm = t.querySelector('.ta-remove');
+    if (rm) rm.onclick = async e => {
+      e.stopPropagation();
+      if (!confirm('Remove?')) return;
+      await fetch(`/api/images/remove/${kind}/${id}`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({image_index: 1})
+      });
+      load(); loadStats();
+    };
+
+    ['dragover','dragenter'].forEach(ev => t.addEventListener(ev, e => {
+      e.preventDefault(); t.classList.add('over');
+    }));
+    t.addEventListener('dragleave', () => t.classList.remove('over'));
+    t.addEventListener('drop', e => {
+      e.preventDefault(); t.classList.remove('over');
+      if (e.dataTransfer.files.length) upload(kind, id, e.dataTransfer.files[0]);
+    });
+  });
+
+  pag.innerHTML = `
+    <button id="prev" ${PAGE === 1 ? 'disabled' : ''}>‹ Prev</button>
+    <span class="page-info">Page ${d.page} / ${d.total_pages} · ${d.total_slots} slots</span>
+    <button id="next" ${PAGE === d.total_pages ? 'disabled' : ''}>Next ›</button>
+  `;
+  const p = document.getElementById('prev');
+  const n = document.getElementById('next');
+  if (p) p.onclick = () => { PAGE--; load(); };
+  if (n) n.onclick = () => { PAGE++; load(); };
+}
+
+function pick(kind, id){
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = 'image/*';
+  inp.onchange = () => { if (inp.files.length) upload(kind, id, inp.files[0]); };
+  inp.click();
+}
+
+async function upload(kind, id, file){
+  const s = getSettings();
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('width', s.width);
+  fd.append('height', s.height);
+  fd.append('mode', s.mode);
+  fd.append('bg_color', s.bg_color);
+  fd.append('quality', s.quality);
+  fd.append('filter', s.filter);
+  fd.append('image_index', 1);
+  toast('Uploading…');
+  const r = await fetch(`/api/images/upload/${kind}/${id}`, {method:'POST', body: fd});
+  const d = await r.json();
+  if (d.ok) { toast('✓ Uploaded'); load(); loadStats(); }
+  else toast('✗ ' + (d.error || ''), true);
+}
+
+function esc(s){ return String(s).replace(/[&<>"']/g, c =>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+document.querySelectorAll('#kindSeg button').forEach(b => {
+  b.onclick = () => {
+    document.querySelectorAll('#kindSeg button').forEach(x => x.classList.remove('active'));
+    b.classList.add('active'); KIND = b.dataset.kind; PAGE = 1; load();
+  };
+});
+document.querySelectorAll('#statusSeg button').forEach(b => {
+  b.onclick = () => {
+    document.querySelectorAll('#statusSeg button').forEach(x => x.classList.remove('active'));
+    b.classList.add('active'); STATUS = b.dataset.status; PAGE = 1; load();
+  };
+});
+
+loadStats();
+load();
+</script>
+{% endblock %}

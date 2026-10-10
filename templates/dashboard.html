@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<h1>Dashboard</h1>
+
+<div class="grid">
+  <div class="stat"><div class="k">Batches</div><div class="v" id="s-batches_total">0</div></div>
+  <div class="stat"><div class="k">Products</div><div class="v" id="s-products_total">0</div></div>
+  <div class="stat"><div class="k">Products Ready</div><div class="v ok" id="s-products_ready">0</div></div>
+  <div class="stat"><div class="k">Products Pending</div><div class="v" id="s-products_pending">0</div></div>
+  <div class="stat"><div class="k">Products Failed</div><div class="v fail" id="s-products_failed">0</div></div>
+  <div class="stat"><div class="k">Product Images</div><div class="v" id="s-products_with_image">0</div></div>
+  <div class="stat"><div class="k">Posts</div><div class="v" id="s-posts_total">0</div></div>
+  <div class="stat"><div class="k">Posts Ready</div><div class="v ok" id="s-posts_ready">0</div></div>
+  <div class="stat"><div class="k">Posts Published</div><div class="v ok" id="s-posts_published">0</div></div>
+  <div class="stat"><div class="k">Post Images</div><div class="v" id="s-posts_with_image">0</div></div>
+  <div class="stat"><div class="k">SEO Pass (80+)</div><div class="v ok" id="s-seo_pass">0</div></div>
+  <div class="stat"><div class="k">SEO Fail</div><div class="v fail" id="s-seo_fail">0</div></div>
+  <div class="stat"><div class="k">Duplicate Fail</div><div class="v fail" id="s-dup_fail">0</div></div>
+  <div class="stat"><div class="k">Internal Links</div><div class="v" id="s-internal_links">0</div></div>
+  <div class="stat"><div class="k">Memory Items</div><div class="v" id="s-memory_count">0</div></div>
+</div>
+
+<div class="card">
+  <h2>Quick Actions</h2>
+  <button class="btn" onclick="location.href='/products'">➕ Products</button>
+  <button class="btn" onclick="location.href='/posts'">📝 Posts</button>
+  <button class="btn" onclick="location.href='/images'">🖼 Images</button>
+  <button class="btn secondary" onclick="location.href='/pages'">📄 Pages</button>
+  <button class="btn secondary" onclick="refresh()">🔄 Refresh</button>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+async function refresh(){
+  const r = await fetch('/api/stats');
+  const s = await r.json();
+  for (const [k, v] of Object.entries(s)) {
+    const el = document.getElementById('s-' + k);
+    if (el) el.textContent = v;
+  }
+}
+refresh();
+setInterval(refresh, 10000);
+</script>
+{% endblock %}

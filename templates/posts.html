@@ -1,0 +1,332 @@
+{% extends "base.html" %}
+{% block title %}Posts{% endblock %}
+{% block content %}
+<h1>Blog Posts</h1>
+
+<div class="card">
+  <h2>Create New Post Batch</h2>
+  <div class="row">
+    <div style="flex:2;min-width:200px">
+      <label>Batch Name</label>
+      <input type="text" id="batch_name" placeholder="e.g. Guides Feb 2026">
+    </div>
+    <div style="flex:1;min-width:150px">
+      <label>Category *</label>
+      <select id="batch_category">
+        <option value="">-- Select --</option>
+        {% for c in categories %}
+          <option value="{{ c }}">{{ c }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+  <label>Tags (comma-separated)</label>
+  <input type="text" id="batch_tags" placeholder="herbal, guides, wellness">
+  <label>Attributes (optional — Name=Value; Name=Value)</label>
+  <input type="text" id="batch_attributes" placeholder="e.g. Type=Guide; Tone=Informational">
+  <button class="btn" onclick="createBatch()">➕ Create Batch</button>
+  <div id="batch_result" class="result"></div>
+</div>
+
+<div class="card">
+  <h2>Add New Post</h2>
+  <label>Select Batch</label>
+  <select id="add_batch_id"><option value="">-- No batch --</option></select>
+  <label>Post Title</label>
+  <input type="text" id="post_title" placeholder="e.g. Badam ke Faide — Complete Guide">
+  <label>Raw Content (500+ words recommended)</label>
+  <textarea id="post_content" rows="10" placeholder="Paste source article here..."></textarea>
+  <label>Target Word Count</label>
+  <select id="targetWords">
+    <option value="600">600 words</option>
+    <option value="800">800 words</option>
+    <option value="1000" selected>1000 words</option>
+    <option value="1200">1200 words</option>
+  </select>
+  <div class="row">
+    <button class="btn" onclick="addPost()">➕ Add Post</button>
+    <button class="btn" onclick="generateBatch()">⚡ Generate Batch (5)</button>
+    <button class="btn secondary" onclick="dedup()">🔍 Duplicate Check</button>
+    <button class="btn secondary" onclick="buildLinks()">🔗 Build Internal Links</button>
+    <button class="btn secondary" onclick="retryFailed()">🔄 Retry Failed</button>
+    <button class="btn secondary" onclick="clearAll()">🗑 Clear</button>
+  </div>
+  <div id="result" class="result"></div>
+</div>
+
+<div class="card">
+  <h2>Filter by Batch</h2>
+  <select id="filter_batch_id" onchange="load()">
+    <option value="">All Posts</option>
+  </select>
+</div>
+
+<div class="card">
+  <h2>Post List</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>ID</th><th>Batch</th><th>Title</th><th>Slug</th>
+        <th>Category</th><th>Status</th><th>Words</th><th>SEO</th>
+        <th>Images</th><th>WP</th><th>Actions</th>
+      </tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Post Images Modal -->
+<div id="imgModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;
+  background:rgba(0,0,0,.75);z-index:1000;padding:24px;overflow-y:auto;">
+  <div style="max-width:900px;margin:0 auto;background:#111c2f;border-radius:14px;padding:24px;">
+    <h2 style="margin-bottom:16px">Post Images</h2>
+    <div id="slotsContainer" class="tile-grid" style="margin-bottom:16px"></div>
+    <div style="text-align:right">
+      <button class="btn secondary" onclick="closeImgModal()">Close</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const POST_IMG_COUNT = { post_images_count };
+let ALL_BATCHES = [];
+let ALL_POSTS = [];
+
+async function loadBatches(){
+  const r = await fetch('/api/posts/batches');
+  ALL_BATCHES = await r.json();
+  const opts = ALL_BATCHES.map(b =>
+    `<option value="${b.id}">${esc(b.name)} (${b.category}) — ${b.item_count} items</option>`).join('');
+  document.getElementById('add_batch_id').innerHTML =
+    '<option value="">-- No batch --</option>' + opts;
+  document.getElementById('filter_batch_id').innerHTML =
+    '<option value="">All Posts</option>' + opts;
+}
+
+async function createBatch(){
+  const name = document.getElementById('batch_name').value.trim();
+  const category = document.getElementById('batch_category').value;
+  const tags = document.getElementById('batch_tags').value.trim();
+  const attributes = document.getElementById('batch_attributes').value.trim();
+  if (!name) { toast('Batch name required', true); return; }
+  if (!category) { toast('Category required', true); return; }
+  const r = await fetch('/api/posts/batch/create', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({name, category, tags, attributes})
+  });
+  const d = await r.json();
+  document.getElementById('batch_result').textContent =
+    d.ok ? `✓ Batch created (ID ${d.batch_id})` : '✗ ' + d.error;
+  if (d.ok) {
+    document.getElementById('batch_name').value = '';
+    document.getElementById('batch_tags').value = '';
+    document.getElementById('batch_attributes').value = '';
+    loadBatches();
+  }
+}
+
+async function addPost(){
+  const title = document.getElementById('post_title').value.trim();
+  const content = document.getElementById('post_content').value.trim();
+  const batch_id = document.getElementById('add_batch_id').value || null;
+  if (!title || content.length < 100) {
+    toast('Title + ≥100 char content required', true); return;
+  }
+  const r = await fetch('/api/posts/add', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({title, content,
+      batch_id: batch_id ? parseInt(batch_id) : null})
+  });
+  const d = await r.json();
+  document.getElementById('result').textContent = d.ok
+    ? `✓ Added (ID ${d.id})` : '✗ ' + d.error;
+  if (d.ok) {
+    document.getElementById('post_title').value = '';
+    document.getElementById('post_content').value = '';
+  }
+  load(); loadBatches();
+}
+
+async function generateBatch(){
+  const tw = document.getElementById('targetWords').value;
+  const bid = document.getElementById('filter_batch_id').value || null;
+  toast('Generating batch…');
+  const r = await fetch('/api/posts/generate-batch', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({limit: 5, target_words: parseInt(tw),
+                          batch_id: bid ? parseInt(bid) : null})
+  });
+  const d = await r.json();
+  toast(`✓ Done: ${d.processed}, Failed: ${d.failed}`);
+  load();
+}
+
+async function genOne(id){
+  const tw = document.getElementById('targetWords').value;
+  toast('Generating post…');
+  const r = await fetch(`/api/posts/generate/${id}`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({target_words: parseInt(tw)})
+  });
+  const d = await r.json();
+  toast(d.ok ? `✓ SEO ${d.seo_score}, ${d.word_count} words`
+             : '✗ ' + d.error, !d.ok);
+  load();
+}
+
+async function delOne(id){
+  if (!confirm('Delete?')) return;
+  await fetch(`/api/posts/delete/${id}`, {method:'POST'});
+  load();
+}
+
+async function dedup(){
+  const r = await fetch('/api/posts/dedup', {method:'POST'});
+  const d = await r.json();
+  toast(`Checked ${d.checked} posts`);
+  load();
+}
+
+async function buildLinks(){
+  toast('Building internal links…');
+  const r = await fetch('/api/posts/build-links', {method:'POST'});
+  const d = await r.json();
+  toast(d.ok ? `✓ Total links: ${d.total_links}` : 'Failed', !d.ok);
+}
+
+async function retryFailed(){
+  if (!confirm('Reset FAILED posts?')) return;
+  const r = await fetch('/api/posts/retry-failed', {method:'POST'});
+  const d = await r.json();
+  toast(`✓ ${d.reset} reset`);
+  load();
+}
+
+async function clearAll(){
+  if (!confirm('Delete ALL posts?')) return;
+  await fetch('/api/posts/clear', {method:'POST',
+    headers:{'Content-Type':'application/json'}, body: JSON.stringify({})});
+  load(); loadBatches();
+}
+
+async function openImgModal(id){
+  const r = await fetch(`/api/posts/images/${id}`);
+  const d = await r.json();
+  const slots = d.slots && d.slots.length ? d.slots
+    : Array.from({length: POST_IMG_COUNT}, (_, i) =>
+        ({index: i+1, filename: '', alt: '', filter: 'none'}));
+  const cont = document.getElementById('slotsContainer');
+  const stamp = Date.now();
+  cont.innerHTML = slots.map(s => {
+    const url = s.filename ? `/api/images/preview/post/${id}?index=${s.index}&t=${stamp}` : '';
+    return `
+      <div class="tile" data-idx="${s.index}" data-post-id="${id}">
+        <div class="tile-img" style="${url ? `background-image:url('${url}')` : ''}"></div>
+        <div class="tile-num">Slot ${s.index}</div>
+        <div class="tile-name">
+          <strong>Image ${s.index}</strong>
+        </div>
+        <div class="tile-actions">
+          <button class="ta-upload">⬆</button>
+          <button class="ta-search">🔍</button>
+          ${s.filename ? `<button class="ta-remove">✕</button>` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  cont.querySelectorAll('.tile').forEach(t => {
+    const pid = parseInt(t.dataset.postId);
+    const idx = parseInt(t.dataset.idx);
+    t.querySelector('.ta-upload').onclick = e => {
+      e.stopPropagation();
+      const inp = document.createElement('input');
+      inp.type = 'file'; inp.accept = 'image/*';
+      inp.onchange = () => { if (inp.files.length) uploadPostImage(pid, idx, inp.files[0]); };
+      inp.click();
+    };
+    t.querySelector('.ta-search').onclick = e => {
+      e.stopPropagation();
+      const q = `post image ${idx}`;
+      window.open(`https://www.google.com/search?q=${encodeURIComponent(q)}&tbm=isch&tbs=sur:fc`,
+                  '_blank', 'noopener');
+    };
+    const rm = t.querySelector('.ta-remove');
+    if (rm) rm.onclick = async e => {
+      e.stopPropagation();
+      if (!confirm('Remove?')) return;
+      await fetch(`/api/images/remove/post/${pid}`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({image_index: idx})
+      });
+      load(); openImgModal(pid);
+    };
+  });
+
+  document.getElementById('imgModal').style.display = 'block';
+}
+
+function closeImgModal(){
+  document.getElementById('imgModal').style.display = 'none';
+}
+
+async function uploadPostImage(pid, idx, file){
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('image_index', idx);
+  fd.append('mode', 'fit');
+  fd.append('width', 800);
+  fd.append('height', 800);
+  fd.append('bg_color', '#FFFFFF');
+  fd.append('quality', 88);
+  fd.append('filter', 'none');
+  toast('Uploading…');
+  const r = await fetch(`/api/images/upload/post/${pid}`, {method:'POST', body: fd});
+  const d = await r.json();
+  if (d.ok) { toast('✓ Uploaded'); load(); openImgModal(pid); }
+  else toast('✗ ' + (d.error || ''), true);
+}
+
+async function load(){
+  const r = await fetch('/api/posts');
+  ALL_POSTS = await r.json();
+  const filter_bid = document.getElementById('filter_batch_id').value;
+  const items = filter_bid
+    ? ALL_POSTS.filter(p => String(p.batch_id) === filter_bid)
+    : ALL_POSTS;
+  const tb = document.getElementById('tbody');
+  tb.innerHTML = items.map(p => {
+    const b = ALL_BATCHES.find(x => x.id === p.batch_id);
+    let imgCount = 0;
+    try {
+      const slots = JSON.parse(p.images_json || '[]');
+      imgCount = slots.filter(s => s.filename).length;
+    } catch(e){}
+    return `
+      <tr>
+        <td>${p.id}</td>
+        <td>${b ? esc(b.name) : '—'}</td>
+        <td>${esc(p.title)}</td>
+        <td><code>${p.slug}</code></td>
+        <td>${esc(p.batch_category || '—')}</td>
+        <td><span class="badge ${p.status.toLowerCase()}">${p.status}</span></td>
+        <td>${p.word_count || 0}</td>
+        <td>${p.seo_score || 0}</td>
+        <td><button class="btn-xs" onclick="openImgModal(${p.id})">${imgCount}/${POST_IMG_COUNT}</button></td>
+        <td>${p.wp_post_id ? '✓' : '—'}</td>
+        <td>
+          <button class="btn-xs" onclick="genOne(${p.id})">⚡</button>
+          <button class="btn-xs" onclick="delOne(${p.id})" style="background:#7f1d1d;color:#fecaca">✕</button>
+        </td>
+      </tr>`;
+  }).join('') || '<tr><td colspan="11" class="empty">No posts.</td></tr>';
+}
+
+function esc(s){ return String(s).replace(/[&<>"']/g, c =>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+loadBatches();
+load();
+</script>
+{% endblock %}

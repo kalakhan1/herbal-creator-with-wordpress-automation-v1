@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}WordPress{% endblock %}
+{% block content %}
+<h1>WordPress</h1>
+
+<div class="card">
+  <h2>Connection</h2>
+  <button class="btn" onclick="testConn()">🔌 Test Connection</button>
+  <div id="testResult" class="result"></div>
+</div>
+
+<div class="card">
+  <h2>Upload Images to WordPress</h2>
+  <label>Batch Size</label>
+  <input type="number" id="img_limit" value="20" min="1" max="500">
+  <button class="btn" onclick="uploadImages()">⬆ Upload Images</button>
+  <div id="uploadResult" class="result"></div>
+</div>
+
+<div class="card">
+  <h2>Push Posts as Drafts</h2>
+  <label>Batch Size</label>
+  <input type="number" id="post_limit" value="5" min="1" max="100">
+  <button class="btn" onclick="pushPosts(false)">📝 Create Drafts</button>
+  <button class="btn secondary" onclick="pushPosts(true)">👁 Dry Run</button>
+  <div id="pushResult" class="result"></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+async function testConn(){
+  const el = document.getElementById('testResult');
+  el.textContent = 'Testing…';
+  const r = await fetch('/api/wp/test', {method:'POST'});
+  const d = await r.json();
+  el.innerHTML = d.ok ? `<span style="color:#22c55e">✓ ${d.message}</span>`
+                     : `<span style="color:#f87171">✗ ${d.message}</span>`;
+}
+
+async function uploadImages(){
+  const limit = parseInt(document.getElementById('img_limit').value) || 20;
+  const el = document.getElementById('uploadResult');
+  el.textContent = `Uploading…`;
+  const r = await fetch('/api/wp/upload-images', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({limit})
+  });
+  const d = await r.json();
+  el.innerHTML = d.ok ? `✓ Uploaded: ${d.uploaded}, Failed: ${d.failed_count}`
+                     : `✗ ${d.error || 'Failed'}`;
+}
+
+async function pushPosts(dry){
+  const limit = parseInt(document.getElementById('post_limit').value) || 5;
+  const el = document.getElementById('pushResult');
+  el.textContent = dry ? 'Previewing…' : 'Creating drafts…';
+  const r = await fetch('/api/wp/push-posts', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({limit, dry_run: dry})
+  });
+  const d = await r.json();
+  if (dry) {
+    el.innerHTML = `Preview: ${d.previews.length} posts<br>` +
+      d.previews.map(p => `• ${p.title}`).join('<br>');
+  } else {
+    el.innerHTML = `✓ Created: ${d.created}, Updated: ${d.updated}, Failed: ${d.failed_count}`;
+  }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Export{% endblock %}
+{% block content %}
+<h1>Export</h1>
+
+<div class="card">
+  <h2>Product CSVs (for WooCommerce manual import)</h2>
+  <button class="btn" onclick="doExp('products-without-images')">📄 Products WITHOUT Images</button>
+  <button class="btn" onclick="doExp('products-with-images')">📄 Products WITH Images</button>
+</div>
+
+<div class="card">
+  <h2>Post CSVs (backup)</h2>
+  <button class="btn" onclick="doExp('posts-without-images')">📄 Posts WITHOUT Images</button>
+  <button class="btn" onclick="doExp('posts-with-images')">📄 Posts WITH Images</button>
+</div>
+
+<div class="card">
+  <h2>Image Manifest</h2>
+  <button class="btn" onclick="doExp('manifest')">📄 Image Manifest CSV</button>
+</div>
+
+<div class="card">
+  <h2>Downloads</h2>
+  <div id="downloads">No file exported yet.</div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+async function doExp(ep){
+  const r = await fetch(`/api/export/${ep}`, {method:'POST'});
+  const d = await r.json();
+  if (d.ok) {
+    toast(`✓ Generated: ${d.file}`);
+    document.getElementById('downloads').innerHTML =
+      `<a class="btn" href="/download/${d.file}" download>⬇ Download ${d.file}</a>`;
+  } else toast('Failed', true);
+}
+</script>
+{% endblock %}

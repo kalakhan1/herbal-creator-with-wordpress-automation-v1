@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Herbal Creator{% endblock %}</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="logo">🌿 Herbal Creator</div>
+  <nav>
+    <a href="/" class="{{ 'active' if active=='dashboard' else '' }}">Dashboard</a>
+    <a href="/products" class="{{ 'active' if active=='products' else '' }}">Products</a>
+    <a href="/posts" class="{{ 'active' if active=='posts' else '' }}">Posts</a>
+    <a href="/images" class="{{ 'active' if active=='images' else '' }}">Images</a>
+    <a href="/pages" class="{{ 'active' if active=='pages' else '' }}">Pages</a>
+    <a href="/export" class="{{ 'active' if active=='export' else '' }}">Export</a>
+    <a href="/wordpress" class="{{ 'active' if active=='wordpress' else '' }}">WordPress</a>
+    <a href="/settings" class="{{ 'active' if active=='settings' else '' }}">Settings</a>
+    <a href="/logs" class="{{ 'active' if active=='logs' else '' }}">Logs</a>
+  </nav>
+</header>
+<main class="container">
+{% block content %}{% endblock %}
+</main>
+<div id="toast" class="toast"></div>
+<script src="/static/app.js"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+{% block title %}Products{% endblock %}
+{% block content %}
+<h1>Products</h1>
+
+<div class="card">
+  <h2>Create New Batch</h2>
+  <div class="row">
+    <div style="flex:2;min-width:200px">
+      <label>Batch Name</label>
+      <input type="text" id="batch_name" placeholder="e.g. Oils Batch Feb 2026">
+    </div>
+    <div style="flex:1;min-width:150px">
+      <label>Category *</label>
+      <select id="batch_category">
+        <option value="">-- Select --</option>
+        {% for c in categories %}
+          <option value="{{ c }}">{{ c }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div style="flex:1;min-width:150px" id="customCatBox" style="display:none">
+      <label>Custom Category</label>
+      <input type="text" id="batch_custom_category" placeholder="Type category name">
+    </div>
+  </div>
+  <label>Tags (comma-separated, optional)</label>
+  <input type="text" id="batch_tags" placeholder="e.g. herbal, oils, cold-pressed">
+  <label>Attributes (optional — Format: Name=Value; Name=Value)</label>
+  <input type="text" id="batch_attributes" placeholder="e.g. Form=Oil; Size=500ml">
+  <button class="btn" onclick="createBatch()">➕ Create Batch</button>
+  <div id="batch_result" class="result"></div>
+</div>
+
+<div class="card">
+  <h2>Add Products to Batch</h2>
+  <label>Select Batch</label>
+  <select id="add_batch_id">
+    <option value="">-- No batch (uncategorized) --</option>
+  </select>
+  <label>Product Names (comma-separated)</label>
+  <textarea id="names" rows="5" placeholder="Badam, Kalonji, Ajwain, Honey"></textarea>
+  <label>Target Word Count</label>
+  <select id="targetWords">
+    <option value="600">600 words</option>
+    <option value="800" selected>800 words</option>
+    <option value="1000">1000 words</option>
+    <option value="1200">1200 words</option>
+  </select>
+  <div class="row">
+    <button class="btn" onclick="addProducts()">✅ Add Products</button>
+    <button class="btn" onclick="generateBatch()">⚡ Generate Batch (5)</button>
+    <button class="btn secondary" onclick="dedup()">🔍 Duplicate Check</button>
+    <button class="btn secondary" onclick="buildLinks()">🔗 Build Internal Links</button>
+    <button class="btn secondary" onclick="retryFailed()">🔄 Retry Failed</button>
+    <button class="btn secondary" onclick="clearAll()">🗑 Clear</button>
+  </div>
+  <div id="result" class="result"></div>
+</div>
+
+<div class="card">
+  <h2>Filter by Batch</h2>
+  <select id="filter_batch_id" onchange="load()">
+    <option value="">All Products</option>
+  </select>
+</div>
+
+<div class="card">
+  <h2>Product List</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th><th>Batch</th><th>Name</th><th>Slug</th>
+          <th>Category</th><th>Status</th><th>Words</th><th>SEO</th>
+          <th>Dup</th><th>Image</th><th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+let ALL_BATCHES = [];
+let ALL_PRODUCTS = [];
+
+async function loadBatches(){
+  const r = await fetch('/api/products/batches');
+  ALL_BATCHES = await r.json();
+  const opts = ALL_BATCHES.map(b =>
+    `<option value="${b.id}">${esc(b.name)} (${b.category}) — ${b.item_count} items</option>`).join('');
+  document.getElementById('add_batch_id').innerHTML =
+    '<option value="">-- No batch --</option>' + opts;
+  document.getElementById('filter_batch_id').innerHTML =
+    '<option value="">All Products</option>' + opts;
+}
+
+async function createBatch(){
+  const name = document.getElementById('batch_name').value.trim();
+  const category = document.getElementById('batch_category').value;
+  const tags = document.getElementById('batch_tags').value.trim();
+  const attributes = document.getElementById('batch_attributes').value.trim();
+  if (!name) { toast('Batch name required', true); return; }
+  if (!category) { toast('At least 1 category required', true); return; }
+  const r = await fetch('/api/products/batch/create', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({name, category, tags, attributes})
+  });
+  const d = await r.json();
+  document.getElementById('batch_result').textContent =
+    d.ok ? `✓ Batch created (ID ${d.batch_id})` : '✗ ' + d.error;
+  if (d.ok) {
+    document.getElementById('batch_name').value = '';
+    document.getElementById('batch_tags').value = '';
+    document.getElementById('batch_attributes').value = '';
+    loadBatches();
+  }
+}
+
+async function addProducts(){
+  const names = document.getElementById('names').value.trim();
+  if (!names) { toast('Paste names', true); return; }
+  const batch_id = document.getElementById('add_batch_id').value || null;
+  const r = await fetch('/api/products/add', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({names, batch_id: batch_id ? parseInt(batch_id) : null})
+  });
+  const d = await r.json();
+  document.getElementById('result').textContent = d.ok
+    ? `✓ Added: ${d.added}` : '✗ ' + d.error;
+  load();
+  loadBatches();
+}
+
+async function generateBatch(){
+  const tw = document.getElementById('targetWords').value;
+  const bid = document.getElementById('filter_batch_id').value || null;
+  toast('Generating batch…');
+  const r = await fetch('/api/products/generate-batch', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({limit: 5, target_words: parseInt(tw),
+                          batch_id: bid ? parseInt(bid) : null})
+  });
+  const d = await r.json();
+  toast(`✓ Done: ${d.processed}, Failed: ${d.failed}`);
+  load();
+}
+
+async function genOne(id){
+  const tw = document.getElementById('targetWords').value;
+  toast(`Generating…`);
+  const r = await fetch(`/api/products/generate/${id}`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({target_words: parseInt(tw)})
+  });
+  const d = await r.json();
+  toast(d.ok ? `✓ SEO ${d.seo_score}, ${d.word_count} words`
+             : '✗ ' + d.error, !d.ok);
+  load();
+}
+
+async function delOne(id){
+  if (!confirm('Delete this product?')) return;
+  await fetch(`/api/products/delete/${id}`, {method:'POST'});
+  load();
+}
+
+async function dedup(){
+  const r = await fetch('/api/products/dedup', {method:'POST'});
+  const d = await r.json();
+  toast(`Checked ${d.checked} products`);
+  load();
+}
+
+async function buildLinks(){
+  toast('Building internal links…');
+  const r = await fetch('/api/products/build-links', {method:'POST'});
+  const d = await r.json();
+  toast(d.ok ? `✓ Total links: ${d.total_links}` : 'Failed', !d.ok);
+}
+
+async function retryFailed(){
+  if (!confirm('Reset FAILED products?')) return;
+  const r = await fetch('/api/products/retry-failed', {method:'POST'});
+  const d = await r.json();
+  toast(`✓ ${d.reset} reset`);
+  load();
+}
+
+async function clearAll(){
+  if (!confirm('Delete ALL products?')) return;
+  await fetch('/api/products/clear', {method:'POST',
+    headers:{'Content-Type':'application/json'}, body: JSON.stringify({})});
+  load(); loadBatches();
+}
+
+async function load(){
+  const r = await fetch('/api/products');
+  ALL_PRODUCTS = await r.json();
+  const filter_bid = document.getElementById('filter_batch_id').value;
+  const items = filter_bid
+    ? ALL_PRODUCTS.filter(p => String(p.batch_id) === filter_bid)
+    : ALL_PRODUCTS;
+  const tb = document.getElementById('tbody');
+  tb.innerHTML = items.map(p => {
+    const b = ALL_BATCHES.find(x => x.id === p.batch_id);
+    return `
+    <tr>
+      <td>${p.id}</td>
+      <td>${b ? esc(b.name) : '—'}</td>
+      <td>${esc(p.name)}</td>
+      <td><code>${p.slug}</code></td>
+      <td>${esc(p.batch_category || '—')}</td>
+      <td><span class="badge ${p.status.toLowerCase()}">${p.status}</span></td>
+      <td>${p.product_word_count || 0}</td>
+      <td>${p.seo_score || 0}</td>
+      <td>${(p.duplicate_score || 0).toFixed(2)}</td>
+      <td>${p.image ? '✓' : '—'}</td>
+      <td>
+        <button class="btn-xs" onclick="genOne(${p.id})">⚡</button>
+        <button class="btn-xs" onclick="delOne(${p.id})" style="background:#7f1d1d;color:#fecaca">✕</button>
+      </td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="11" class="empty">No products.</td></tr>';
+}
+
+function esc(s){ return String(s).replace(/[&<>"']/g, c =>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+loadBatches();
+load();
+</script>
+{% endblock %}

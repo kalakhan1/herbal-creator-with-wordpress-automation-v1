@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Logs{% endblock %}
+{% block content %}
+<h1>Logs</h1>
+<button class="btn" onclick="loadLogs()">🔄 Refresh</button>
+<div class="card">
+  <div id="logs" class="logs-full">Loading…</div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+async function loadLogs(){
+  const r = await fetch('/api/logs');
+  const logs = await r.json();
+  document.getElementById('logs').innerHTML = logs.length
+    ? logs.map(l => `<div class="log-line">${esc(l.line)}</div>`).join('')
+    : 'No logs.';
+}
+function esc(s){ return String(s).replace(/[&<>"']/g, c =>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+loadLogs();
+setInterval(loadLogs, 8000);
+</script>
+{% endblock %}

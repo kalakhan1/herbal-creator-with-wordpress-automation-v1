@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block content %}
+<h1>Settings</h1>
+
+<div class="card">
+  <h2>🏬 Store Identity (multi-client)</h2>
+  <label>Store / Brand Name</label>
+  <input type="text" id="STORE_NAME" value="{{ config.STORE_NAME }}">
+  <label>Tagline</label>
+  <input type="text" id="STORE_TAGLINE" value="{{ config.STORE_TAGLINE }}">
+  <div class="row">
+    <div style="flex:1">
+      <label>WhatsApp Number (no +, no spaces)</label>
+      <input type="text" id="STORE_WHATSAPP" value="{{ config.STORE_WHATSAPP }}">
+    </div>
+    <div style="flex:1">
+      <label>WhatsApp Display</label>
+      <input type="text" id="STORE_WHATSAPP_DISPLAY" value="{{ config.STORE_WHATSAPP_DISPLAY }}">
+    </div>
+  </div>
+  <div class="row">
+    <div style="flex:1">
+      <label>Country</label>
+      <input type="text" id="STORE_COUNTRY" value="{{ config.STORE_COUNTRY }}">
+    </div>
+    <div style="flex:1">
+      <label>Currency</label>
+      <input type="text" id="STORE_CURRENCY" value="{{ config.STORE_CURRENCY }}">
+    </div>
+  </div>
+  <label>Established Year (optional)</label>
+  <input type="text" id="STORE_ESTABLISHED" value="{{ config.STORE_ESTABLISHED }}" placeholder="e.g. 2015">
+  <label>Store Email (optional)</label>
+  <input type="text" id="STORE_EMAIL" value="{{ config.STORE_EMAIL }}">
+</div>
+
+<div class="card">
+  <h2>📄 Built-in Pages (About Us, Contact, etc.)</h2>
+  <p class="hint">Leave blank to auto-detect from WordPress. Manual URL has priority.</p>
+  <label>About Us URL</label>
+  <input type="text" id="STORE_ABOUT_URL" value="{{ config.STORE_ABOUT_URL }}"
+         placeholder="{{ pages.about.url if pages.about else 'https://...' }}">
+  <label>Contact URL</label>
+  <input type="text" id="STORE_CONTACT_URL" value="{{ config.STORE_CONTACT_URL }}"
+         placeholder="{{ pages.contact.url if pages.contact else 'https://...' }}">
+  <label>Privacy Policy URL</label>
+  <input type="text" id="STORE_PRIVACY_URL" value="{{ config.STORE_PRIVACY_URL }}">
+  <label>Terms URL</label>
+  <input type="text" id="STORE_TERMS_URL" value="{{ config.STORE_TERMS_URL }}">
+  <label class="toggle-row">
+    <input type="checkbox" id="STORE_PAGE_AUTO_FETCH" {% if config.STORE_PAGE_AUTO_FETCH %}checked{% endif %}>
+    <span>Auto-fetch from WordPress REST API if manual URL blank</span>
+  </label>
+  <button class="btn secondary" onclick="testPages()">🔍 Test Page Auto-Fetch</button>
+  <div id="pageTestResult" class="result"></div>
+</div>
+
+<div class="card">
+  <h2>🌐 WordPress</h2>
+  <label>Site URL</label>
+  <input type="text" id="WP_BASE_URL" value="{{ config.WP_BASE_URL }}">
+  <label>Username</label>
+  <input type="text" id="WP_USERNAME" value="{{ config.WP_USERNAME }}">
+  <label>Application Password</label>
+  <input type="password" id="WP_APP_PASSWORD" value="{{ config.WP_APP_PASSWORD }}">
+</div>
+
+<div class="card">
+  <h2>⚙️ Generation Defaults</h2>
+  <div class="row">
+    <div style="flex:1">
+      <label>Product Words</label>
+      <input type="number" id="DEFAULT_PRODUCT_WORDS" value="{{ config.DEFAULT_PRODUCT_WORDS }}">
+    </div>
+    <div style="flex:1">
+      <label>Post Words</label>
+      <input type="number" id="DEFAULT_POST_WORDS" value="{{ config.DEFAULT_POST_WORDS }}">
+    </div>
+  </div>
+  <div class="row">
+    <div style="flex:1">
+      <label>Default Stock</label>
+      <input type="number" id="DEFAULT_STOCK" value="{{ config.DEFAULT_STOCK }}">
+    </div>
+    <div style="flex:1">
+      <label>Low Stock Alert</label>
+      <input type="number" id="LOW_STOCK_AMOUNT" value="{{ config.LOW_STOCK_AMOUNT }}">
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>🖼️ Image Defaults (applies to all images — uniform output)</h2>
+  <div class="row">
+    <div style="flex:1">
+      <label>Width</label>
+      <input type="number" id="IMAGE_DEFAULT_WIDTH" value="{{ config.IMAGE_DEFAULT_WIDTH }}">
+    </div>
+    <div style="flex:1">
+      <label>Height</label>
+      <input type="number" id="IMAGE_DEFAULT_HEIGHT" value="{{ config.IMAGE_DEFAULT_HEIGHT }}">
+    </div>
+    <div style="flex:1">
+      <label>Mode</label>
+      <select id="IMAGE_DEFAULT_MODE">
+        <option value="fit" {% if config.IMAGE_DEFAULT_MODE=='fit' %}selected{% endif %}>Fit (uniform)</option>
+        <option value="crop" {% if config.IMAGE_DEFAULT_MODE=='crop' %}selected{% endif %}>Crop</option>
+        <option value="auto" {% if config.IMAGE_DEFAULT_MODE=='auto' %}selected{% endif %}>Auto</option>
+      </select>
+    </div>
+    <div style="flex:1">
+      <label>BG Color</label>
+      <input type="color" id="IMAGE_DEFAULT_BG" value="{{ config.IMAGE_DEFAULT_BG }}"
+             style="width:100%;height:42px;padding:2px;border-radius:8px;cursor:pointer">
+    </div>
+  </div>
+  <div class="row">
+    <div style="flex:1">
+      <label>Quality</label>
+      <input type="number" id="IMAGE_DEFAULT_QUALITY" value="{{ config.IMAGE_DEFAULT_QUALITY }}">
+    </div>
+    <div style="flex:1">
+      <label>Default Filter</label>
+      <select id="IMAGE_DEFAULT_FILTER">
+        <option value="none" {% if config.IMAGE_DEFAULT_FILTER=='none' %}selected{% endif %}>None</option>
+        <option value="grayscale" {% if config.IMAGE_DEFAULT_FILTER=='grayscale' %}selected{% endif %}>Grayscale</option>
+        <option value="sepia" {% if config.IMAGE_DEFAULT_FILTER=='sepia' %}selected{% endif %}>Sepia</option>
+        <option value="brightness" {% if config.IMAGE_DEFAULT_FILTER=='brightness' %}selected{% endif %}>Brightness</option>
+        <option value="contrast" {% if config.IMAGE_DEFAULT_FILTER=='contrast' %}selected{% endif %}>Contrast</option>
+        <option value="sharpen" {% if config.IMAGE_DEFAULT_FILTER=='sharpen' %}selected{% endif %}>Sharpen</option>
+        <option value="cool" {% if config.IMAGE_DEFAULT_FILTER=='cool' %}selected{% endif %}>Cool</option>
+        <option value="warm" {% if config.IMAGE_DEFAULT_FILTER=='warm' %}selected{% endif %}>Warm</option>
+        <option value="vintage" {% if config.IMAGE_DEFAULT_FILTER=='vintage' %}selected{% endif %}>Vintage</option>
+      </select>
+    </div>
+    <div style="flex:1">
+      <label>Post Images Count</label>
+      <input type="number" id="POST_IMAGES_COUNT" value="{{ config.POST_IMAGES_COUNT }}" min="1" max="5">
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>🔗 Internal Linking</h2>
+  <div class="row">
+    <div style="flex:1">
+      <label>Mid-Article Links</label>
+      <input type="number" id="MID_ARTICLE_LINKS" value="{{ config.MID_ARTICLE_LINKS }}">
+    </div>
+    <div style="flex:1">
+      <label>End-Article Links</label>
+      <input type="number" id="END_ARTICLE_LINKS" value="{{ config.END_ARTICLE_LINKS }}">
+    </div>
+  </div>
+  <label class="toggle-row">
+    <input type="checkbox" id="LINK_ABOUT_PAGE" {% if config.LINK_ABOUT_PAGE %}checked{% endif %}>
+    <span>Link to About Us page in articles</span>
+  </label>
+</div>
+
+<div class="card">
+  <h2>🔍 SEO Limits (Rank Math)</h2>
+  <div class="row">
+    <div style="flex:1"><label>SEO Title Min</label>
+      <input type="number" id="SEO_TITLE_MIN" value="{{ config.SEO_TITLE_MIN }}"></div>
+    <div style="flex:1"><label>SEO Title Max</label>
+      <input type="number" id="SEO_TITLE_MAX" value="{{ config.SEO_TITLE_MAX }}"></div>
+  </div>
+  <div class="row">
+    <div style="flex:1"><label>Meta Desc Min</label>
+      <input type="number" id="META_DESC_MIN" value="{{ config.META_DESC_MIN }}"></div>
+    <div style="flex:1"><label>Meta Desc Max</label>
+      <input type="number" id="META_DESC_MAX" value="{{ config.META_DESC_MAX }}"></div>
+  </div>
+  <label>Slug Max Words</label>
+  <input type="number" id="SLUG_MAX_WORDS" value="{{ config.SLUG_MAX_WORDS }}">
+</div>
+
+<button class="btn" onclick="saveSettings()">💾 Save All Settings</button>
+<div id="saveResult" class="result"></div>
+{% endblock %}
+{% block scripts %}
+<script>
+async function saveSettings(){
+  const fields = ['STORE_NAME','STORE_TAGLINE','STORE_WHATSAPP','STORE_WHATSAPP_DISPLAY',
+    'STORE_COUNTRY','STORE_CURRENCY','STORE_ESTABLISHED','STORE_EMAIL',
+    'STORE_ABOUT_URL','STORE_CONTACT_URL','STORE_PRIVACY_URL','STORE_TERMS_URL',
+    'WP_BASE_URL','WP_USERNAME','WP_APP_PASSWORD',
+    'DEFAULT_PRODUCT_WORDS','DEFAULT_POST_WORDS','DEFAULT_STOCK','LOW_STOCK_AMOUNT',
+    'IMAGE_DEFAULT_WIDTH','IMAGE_DEFAULT_HEIGHT','IMAGE_DEFAULT_MODE',
+    'IMAGE_DEFAULT_BG','IMAGE_DEFAULT_QUALITY','IMAGE_DEFAULT_FILTER',
+    'POST_IMAGES_COUNT','MID_ARTICLE_LINKS','END_ARTICLE_LINKS',
+    'SEO_TITLE_MIN','SEO_TITLE_MAX','META_DESC_MIN','META_DESC_MAX','SLUG_MAX_WORDS'];
+  const data = {};
+  fields.forEach(f => { const el = document.getElementById(f); if (el) data[f] = el.value; });
+  data.STORE_PAGE_AUTO_FETCH = document.getElementById('STORE_PAGE_AUTO_FETCH').checked ? 'true' : 'false';
+  data.LINK_ABOUT_PAGE = document.getElementById('LINK_ABOUT_PAGE').checked ? 'true' : 'false';
+  const r = await fetch('/api/settings/save', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(data)
+  });
+  const d = await r.json();
+  document.getElementById('saveResult').textContent = d.ok ? '✓ ' + d.message : '✗ Failed';
+  toast(d.ok ? '✓ Saved' : '✗ Failed', !d.ok);
+}
+
+async function testPages(){
+  const r = await fetch('/api/settings/test-pages', {method:'POST'});
+  const d = await r.json();
+  let html = '';
+  for (const [k, v] of Object.entries(d.pages)) {
+    const found = v && v.url ? `✓ ${v.url}` : '✗ Not found';
+    html += `<div><strong>${k}:</strong> ${esc(found)}</div>`;
+  }
+  document.getElementById('pageTestResult').innerHTML = html;
+}
+
+function esc(s){ return String(s).replace(/[&<>"']/g, c =>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+</script>
+{% endblock %}

@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Pages{% endblock %}
+{% block content %}
+<h1>Built-in Pages</h1>
+
+<div class="card">
+  <h2>Auto-Detected Pages</h2>
+  <p class="hint">These pages are used for internal linking in articles. Manual URLs (from Settings) have priority.</p>
+  <button class="btn" onclick="refresh()">🔄 Refresh from WordPress</button>
+  <div id="pagesContainer" style="margin-top:16px">
+    <p>Loading…</p>
+  </div>
+</div>
+
+<div class="card">
+  <h2>How It Works</h2>
+  <ul style="padding-left:20px;line-height:1.8">
+    <li>About Us page URL is auto-detected from WordPress (`/about-us`, `/about`, `/who-we-are`, `/our-story`)</li>
+    <li>Manual URLs from Settings page take priority over auto-detection</li>
+    <li>Results are cached in database for 30+ days</li>
+    <li>Product/Post articles will link to About Us if enabled in Settings</li>
+  </ul>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+async function refresh(){
+  const r = await fetch('/api/pages/refresh', {method:'POST'});
+  const d = await r.json();
+  render(d.pages);
+  toast('✓ Refreshed');
+}
+
+function render(pages){
+  const c = document.getElementById('pagesContainer');
+  c.innerHTML = Object.entries(pages).map(([k, v]) => {
+    const status = v && v.url ? '✓' : '✗';
+    const cls = v && v.url ? 'ok' : 'fail';
+    const url = v && v.url ? v.url : 'Not found';
+    const source = v && v.source ? `(${v.source})` : '';
+    return `<div style="padding:10px;background:#0b1424;border-radius:8px;margin-bottom:8px">
+      <strong>${k.toUpperCase()}</strong> <span style="color:${cls==='ok'?'#22c55e':'#ef4444'}">${status}</span>
+      <span style="color:#8ea0bd">${source}</span>
+      <div style="color:#cbd5e1;font-size:13px;margin-top:4px;word-break:break-all">${url}</div>
+    </div>`;
+  }).join('');
+}
+
+async function load(){
+  const r = await fetch('/api/pages/list');
+  const pages = await r.json();
+  render(pages);
+}
+load();
+</script>
+{% endblock %}
